@@ -1,4 +1,3 @@
-# ToDO Break, continue, pass
 
 for i in range(0,5):
     print(i + " level")
