@@ -5,7 +5,7 @@ match var:
     case "abcdef":
         if boolean:
             print("match")
-    case "qwerty":
+    case "qwerty" if boolean:
         pass
     case _:
         bool = False

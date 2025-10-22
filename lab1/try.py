@@ -8,5 +8,6 @@ def div(a:int):
     finally:
         print("common try end")
 
+div(div(100))
 div(10)
 div(0)

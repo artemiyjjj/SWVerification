@@ -1,5 +1,6 @@
 import ast
-import pprint
+import copy
+# import pprint
 from graphviz import Digraph
 
 files = {
@@ -14,48 +15,99 @@ files = {
     "while"
 }
 
-# files = {"try"}
+# files = {"if"}
 
-def add_node(dot, node: ast.AST, parent=None, edge_name=""):
+def add_node(dot, node: ast.AST, parent=None, edge_name="", parent_attrs_func=None):
     global stack_of_scopes
+    # global id
     current_scope = stack_of_scopes[-1]
     node_name = str(node.__class__.__name__)
     parent_name = str(parent.__class__.__name__)
     node_attrs = []
+    elsebranch = None
+
+    def get_node_attrs():
+        nonlocal node_attrs
+        return node_attrs
+
     match node_name:
+        # Add node's info to their parent node
         case "Name":
-            node_attrs.append("id: " + str(node.id))
+            parent_attrs_func().append(edge_name + ": " + str(node.id))
+            return
+        case "And" | "Eq" | "NotEq" |  "Or" | "Not" | "Lt" | "LtE" | "Gt" | "GtE" | \
+             "Add" | "Div" | "Sub" | "Mult" | "FloorDiv" | "Mod" | "Pow" | "LShift" | "RShift" | \
+             "BitOr" | "BitXor" | "BitAnd" | "MatMult" | "Is" | "IsNot" | "In" | "NotIn":
+            parent_attrs_func().append(edge_name + ": " + str(node.__class__.__name__))
+            return
+        # Add node attributes
         case "arg":
             node_attrs.append("arg: " + str(node.arg))
         case "Constant":
             node_attrs.append("value: " + str(node.value))
+        # Add function context to make it independent from main execution
+        # and other functions
         case "FunctionDef":
             stack_of_scopes.append([])
             node_attrs.append("name: " + str(node.name))
             node_attrs.append("returns: " + str(node.returns))
-        case "Assign" | "Expr" | "Break" | "Continue" | "Raise" | "Return" | "Yield" | "If" | "Try" | "ExceptHandler" | "For" | "While":
-            if current_scope:
-                dot.edge(str(id(current_scope[-1])), str(id(node)), color="red")
+        case "Assign" | "Call" | "Expr" | "Break" | "Continue" | "Raise" | "Return" | "Yield" | "If" | "Try" | "ExceptHandler" | "For" | "While" | \
+             "BinOp" | "UnaryOp" | "BoolOp" | "IfExp":
+            if node_name == "If" and parent_name != "If" and len(current_scope) >= 1:
+                for elem in current_scope:
+                    dot.edge(str(id(elem)), str(id(node)), color="red")
+                current_scope.clear()
+            if node_name == "If" or edge_name == "orelse":
+                stack_of_scopes.append(copy.copy(current_scope))
+                current_scope = stack_of_scopes[-1]
+            if parent_name == "If" and edge_name == "orelse":
+                # Remove connection with expression from previous if node
                 current_scope.pop()
+                current_scope.append(parent)
+            if len(current_scope) >= 1:
+                # !!! сюда же try, except
+                for elem in current_scope:
+                    dot.edge(str(id(elem)), str(id(node)), color="red")
+                current_scope.clear()
             current_scope.append(node)
+        # Remove excessive node types
+        case "Load" | "Store":
+            return
         case _:
             pass
-    dot.node(str(id(node)), node_name + "\n" + '\n'.join(node_attrs))
+    
     if parent:
         dot.edge(str(id(parent)), str(id(node)), label=edge_name)
-        if (parent_name == "If" or parent_name == "While") and edge_name == "orelse":
-            dot.edge(str(id(parent)), str(id(node)), color="red")
+        # if (parent_name == "If" or parent_name == "While") and edge_name == "orelse":
+        #     dot.edge(str(id(parent)), str(id(node)), color="red")
+    # Then moving to children
     for name, item in ast.iter_fields(node):
         if isinstance(item, ast.AST):
-            add_node(dot, item, node, name)
+            add_node(dot, item, node, name, get_node_attrs)
         elif isinstance(item, list):
             for child in item:
                 if isinstance(child, ast.AST):
-                    add_node(dot=dot, node=child, parent=node, edge_name=name)
-    if node_name == "If":
-        current_scope.append(node)
-    elif node_name == "FunctionDef":
+                    add_node(dot=dot, node=child, parent=node, edge_name=name, parent_attrs_func=get_node_attrs)
+    # Then returning to parent, moving to siblings
+    if node_name == "FunctionDef":
         stack_of_scopes.pop()
+    elif node_name == "If" or edge_name == "orelse":
+        forward_list = stack_of_scopes.pop()
+        try:
+            elsebranch = getattr(node, "orelse")
+        except AttributeError:
+            pass
+        # Add connection from if node to siblings if it has no orelse attr
+        if node_name == "If" and edge_name != "orelse" and not elsebranch:
+                forward_list.append(node)
+        try:
+            stack_of_scopes[-1].extend(forward_list)
+        except IndexError:
+            stack_of_scopes.append(forward_list)
+    elif parent_name == "If" and edge_name == "test":
+        current_scope.pop()
+        current_scope.append(parent)
+    dot.node(str(id(node)), node_name + "\n" + '\n'.join(node_attrs))
 
 def read_programm(file: str) -> str:
     with open(file, "r") as f:
@@ -67,8 +119,8 @@ def get_ast(text: str) -> ast.AST:
 def visualise_ast(tree: ast.AST, outfilename: str):
     global stack_of_scopes
     dot = Digraph()
-    stack_of_scopes = []
-    stack_of_scopes.append([])
+    stack_of_scopes = [[]]
+    # stack_of_scopes.append([])
     add_node(dot, tree)
     dot.format="png"
     dot.render(outfilename, cleanup=True)
@@ -79,5 +131,3 @@ for file in files:
     tree = get_ast(text)
     # pprint.pprint(ast.dump(tree))
     visualise_ast(tree, "images/" + file)
-
-
