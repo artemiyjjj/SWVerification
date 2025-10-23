@@ -11,3 +11,20 @@ def div(a:int):
 div(div(100))
 div(10)
 div(0)
+
+try:
+    if div(10):
+        pass
+    else:
+        print("not passed")
+except:
+    pass
+
+try:
+    pass
+except IndentationError:
+    pass
+except:
+    print("")
+
+a = 2532526
