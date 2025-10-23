@@ -1,6 +1,9 @@
 a = True
 b = 0
 
+while b:
+    b += 1
+
 while a:
     b += 1
     if b != 10:

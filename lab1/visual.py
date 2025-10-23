@@ -15,8 +15,6 @@ files = {
     "while"
 }
 
-# files = {"try"}
-
 def add_node(dot, node: ast.AST, parent=None, edge_name="", parent_attrs_func=None):
     global stack_of_scopes
     current_scope = stack_of_scopes[-1]
@@ -39,7 +37,6 @@ def add_node(dot, node: ast.AST, parent=None, edge_name="", parent_attrs_func=No
         nonlocal node_attrs
         return node_attrs
 
-    print("IN " + node_name + " " + ast.unparse(node))
     match node_name:
         # Add node's info to their parent node
         case "Name":
@@ -60,13 +57,13 @@ def add_node(dot, node: ast.AST, parent=None, edge_name="", parent_attrs_func=No
             stack_of_scopes.append([node])
             node_attrs.append("name: " + str(node.name))
             node_attrs.append("returns: " + str(node.returns))
-        case "Assign" | "Call" | "Expr" | "Break" | "Pass" | "Continue" | "Raise" | "Return" | "Yield" | "If" | "Try" | "ExceptHandler" | "For" | "While" | \
-             "BinOp" | "UnaryOp" | "BoolOp" | "IfExp":
-            if ((node_name == "If" and parent_name != "If") or node_name == "Try") and len(current_scope) >= 1:
+        case "Assign" | "AugAssign" | "Call" | "Expr" | "Break" | "Pass" | "Continue" | "Raise" | "Return" | "Yield" | "If" | \
+              "Try" | "ExceptHandler" | "For" | "While" | "BinOp" | "UnaryOp" | "BoolOp" | "IfExp" | "Compare":
+            if ((node_name == "If" and parent_name != "If") or node_name == "While" or node_name == "Try") and len(current_scope) >= 1:
                 for elem in current_scope:
                     dot.edge(str(id(elem)), str(id(node)), color="red")
                 current_scope.clear()
-            if node_name == "If" or node_name == "ExceptHandler" or edge_name == "orelse":
+            if node_name == "If" or node_name == "ExceptHandler" or edge_name == "orelse" or node_name == "While":
                 stack_of_scopes.append(copy.copy(current_scope))
                 current_scope = stack_of_scopes[-1]
             elif node_name == "Try":
@@ -74,17 +71,11 @@ def add_node(dot, node: ast.AST, parent=None, edge_name="", parent_attrs_func=No
                 stack_of_scopes.append(copy.copy(current_scope))
                 stack_of_scopes.append(copy.copy(current_scope))
                 current_scope = stack_of_scopes[-1]
-            # elif node_name == "ExceptHandler":
-                # current_scope = stack_of_scopes[-2]
-            if (parent_name == "If" and edge_name == "orelse"):
-                # Remove connection with expression from previous if node or handlers edge
-                current_scope.pop()
+            if (parent_name == "If" or parent_name == "While") and edge_name == "orelse":
+                # Remove connection with expression from previous if node
+                current_scope.clear()
                 current_scope.append(parent)
-            # elif  parent_name == "Try" and (edge_name == "handlers" or edge_name == "orelse") and len(current_scope) > 1:
-            #     # Remove connection with previous handlers edge
-            #     current_scope.pop()
             if len(current_scope) >= 1:
-                # !!! сюда же try, except
                 for elem in current_scope:
                     dot.edge(str(id(elem)), str(id(node)), color="red")
                 current_scope.clear()
@@ -109,10 +100,10 @@ def add_node(dot, node: ast.AST, parent=None, edge_name="", parent_attrs_func=No
     if node_name == "FunctionDef":
         stack_of_scopes.pop()
     # Works or try.orelse too
-    elif node_name == "If" or node_name == "Try" or edge_name == "orelse":
+    elif node_name == "If" or node_name == "Try" or edge_name == "orelse" or node_name == "While":
         forward_list = stack_of_scopes.pop()
         # Add connection from if node to siblings if it has no orelse attr
-        if (node_name == "If") and edge_name != "orelse" and not elsebranch:
+        if (node_name == "If" or node_name == "While") and edge_name != "orelse" and not elsebranch:
                 forward_list.append(node)
         try:
             stack_of_scopes[-1].extend(forward_list)
