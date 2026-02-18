@@ -2,23 +2,51 @@
 Тестовая программа 3: Связность между классами (Coupling)
 Ожидаемые метрики:
 - ClassA: CBO должен учитывать использование ClassB и ClassC
-- ClassB: CBO должен учитывать использование ClassA
-- ClassC: CBO должен учитывать использование ClassA
+- ClassB: CBO должен учитывать использование Class C
 """
+
+class ClassC:
+    """Класс C, использующий ClassA"""
+    
+    def __init__(self):
+        self.factor = 2
+
+    def get_factor(self):
+        return self.factor
+    
+
+class ClassB:
+    """Класс B, использующий ClassA"""
+    
+    def __init__(self):
+        self.data = "data from B"
+        self.class_c : ClassC = ClassC()
+    
+    def set_class_c(self, c: ClassC):
+        """Устанавливает связь с ClassA"""
+        self.class_c = c
+    
+    def get_data(self):
+        """Возвращает данные"""
+        return self.data
+    
+    def use_class_c(self):
+        """Использует ClassC"""
+        return self.class_c.factor
 
 class ClassA:
     """Класс A, использующий другие классы"""
     
     def __init__(self):
         self.value = 10
-        self.class_b = None
-        self.class_c = None
+        self.class_b = ClassB()
+        self.class_c = ClassC()
     
-    def set_class_b(self, b):
+    def set_class_b(self, b: ClassB):
         """Устанавливает связь с ClassB"""
         self.class_b = b
     
-    def set_class_c(self, c):
+    def set_class_c(self, c: ClassC):
         """Устанавливает связь с ClassC"""
         self.class_c = c
     
@@ -30,47 +58,5 @@ class ClassA:
     
     def process_with_c(self):
         """Использует ClassC"""
-        if self.class_c:
-            return self.class_c.compute()
-        return None
-
-
-class ClassB:
-    """Класс B, использующий ClassA"""
-    
-    def __init__(self):
-        self.data = "data from B"
-        self.class_a = None
-    
-    def set_class_a(self, a):
-        """Устанавливает связь с ClassA"""
-        self.class_a = a
-    
-    def get_data(self):
-        """Возвращает данные"""
-        return self.data
-    
-    def use_class_a(self):
-        """Использует ClassA"""
-        if self.class_a:
-            return self.class_a.value
-        return None
-
-
-class ClassC:
-    """Класс C, использующий ClassA"""
-    
-    def __init__(self):
-        self.factor = 2
-        self.class_a = None
-    
-    def set_class_a(self, a):
-        """Устанавливает связь с ClassA"""
-        self.class_a = a
-    
-    def compute(self):
-        """Вычисляет значение"""
-        if self.class_a:
-            return self.class_a.value * self.factor
-        return 0
+        return self.class_c.get_factor()
 

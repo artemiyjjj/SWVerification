@@ -12,6 +12,7 @@ class HighCohesionClass:
         self.x = 0
         self.y = 0
         self.result = 0
+        self.another = LowCohesionClass()
     
     def set_x(self, value):
         self.x = value
@@ -20,6 +21,10 @@ class HighCohesionClass:
     def set_y(self, value):
         self.y = value
         self.update_result()
+
+    def change_another(self, value):
+        self.another.attr1 = value
+        self.another.method1()
     
     def update_result(self):
         self.result = self.x + self.y

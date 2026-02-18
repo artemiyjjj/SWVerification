@@ -40,8 +40,6 @@ class MetricsDisplay:
     
     def display_summary_table(self):
         """Отобразить сводную таблицу метрик"""
-        # print("\n" + "="*60)
-        print("СВОДНАЯ ТАБЛИЦА МЕТРИК")
         print("="*60)
         
         # Заголовок таблицы

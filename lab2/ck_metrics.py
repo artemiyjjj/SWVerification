@@ -18,9 +18,10 @@ from collections import defaultdict
 class Method:
     """Представление метода класса"""
     
-    def __init__(self, name: str, node: ast.FunctionDef):
+    def __init__(self, name: str, node: ast.FunctionDef, parent_class):
         self.name = name
         self.node = node
+        self.parent_class = parent_class
         self.accessed_attributes: Set[str] = set()
         self.called_methods: Set[str] = set()
         self.accessed_classes: Set[str] = set()
@@ -61,6 +62,9 @@ class ClassModel:
         """Добавить базовый класс"""
         self.base_classes.append(base)
 
+    def get_methods(self):
+        return self.methods.keys()
+
 
 class ProgramModel:
     """Модель программы для анализа метрик"""
@@ -75,7 +79,7 @@ class ProgramModel:
         self.classes[class_model.name] = class_model
         for base in class_model.base_classes:
             self.inheritance_tree[base].append(class_model.name)
-    
+
     def get_class(self, name: str) -> Optional[ClassModel]:
         """Получить класс по имени"""
         return self.classes.get(name)
@@ -116,8 +120,9 @@ class CKMetricsCalculator:
     
     def wmc(self, class_name: str) -> int:
         """
-        WMC (Weighted Methods per Class) - количество методов в классе.
-        В простом случае вес каждого метода = 1.
+        WMC (Weighted Methods per Class) - Взвешенные методы на класс.
+        sum (1..n) c[i]
+        Цикломатическая Сложность методов не учитывается
         """
         class_model = self.model.get_class(class_name)
         if not class_model:
@@ -173,15 +178,23 @@ class CKMetricsCalculator:
         if not class_model:
             return 0
         
+        all_methods = []
+        for model_class in self.model.classes.values():
+            all_methods.extend(model_class.get_methods())
+        
         # Множество всех методов, которые могут быть вызваны
         response_set: Set[str] = set()
         
         # Добавляем все методы класса
         response_set.update(class_model.methods.keys())
         
-        # Добавляем методы, вызываемые из методов класса
+        # Добавляем методы, вызываемые из методов класса, если методы других классов модели (а не только стандартных)
         for method in class_model.methods.values():
-            response_set.update(method.called_methods)
+            for called_method in method.called_methods:
+                # Проверка совпадения имени вызываемой функции с методами классов модели
+                if called_method in all_methods:
+                    response_set.update(called_method)
+                    # print(called_method)
         
         return len(response_set)
     
@@ -298,7 +311,7 @@ class ModelBuilder:
     
     def _visit_method(self, node: ast.FunctionDef, class_model: ClassModel):
         """Обработка метода класса"""
-        method = Method(node.name, node)
+        method = Method(node.name, node, class_model)
         
         old_method = self.current_method
         self.current_method = node.name
@@ -322,6 +335,20 @@ class ModelBuilder:
                     if child.id in class_model.attributes:
                         method.add_accessed_attribute(child.id)
         
+         # Обработка аннотаций типов параметров метода
+        for arg in node.args.args:  # Исправлено с node.args на node.args.args
+            if isinstance(arg, ast.arg):
+                # Обработка аннотаций типов
+                if arg.annotation:
+                    if isinstance(arg.annotation, ast.Name):
+                        if arg.annotation.id in self.model.classes:
+                            method.add_accessed_class(arg.annotation.id)
+                    elif isinstance(arg.annotation, ast.Subscript):
+                        # Обработка типов вроде List[SomeClass], Optional[SomeClass]
+                        if isinstance(arg.annotation.value, ast.Name):
+                            if arg.annotation.value.id in self.model.classes:
+                                method.add_accessed_class(arg.annotation.value.id)
+
         class_model.add_method(method)
         self.current_method = old_method
     
@@ -367,6 +394,9 @@ class ModelBuilder:
         elif isinstance(node.func, ast.Name):
             # Прямой вызов функции
             method.add_called_method(node.func.id)
+            if node.func.id in self.model.classes:
+                # Это создание экземпляра класса
+                method.add_accessed_class(node.func.id)
     
     def _get_full_name(self, node: ast.Attribute) -> str:
         """Получить полное имя из атрибута"""
