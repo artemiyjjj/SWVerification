@@ -1,0 +1,32 @@
+DEFINE
+  MAX_CLIENTS := N + 2*M;
+
+MODULE client(id)
+VAR
+  state : {idle, waiting, serving, served, left};
+  wait_cnt : 0..K; -- Счётчик времени, проведённый в очереди
+  service : {send, receive};
+
+ASSIGN
+  init(state) := idle;
+  init(wait_cnt) := 0;
+  init(service) := {send, receive};
+
+  next(state) :=
+    case
+      state = idle   & env.client_arrives[id] : waiting;
+      state = waiting & wait_cnt >= K          : left;
+      state = waiting & env.start_service[id] : serving;
+      state = serving & env.service_done[id]  : served;
+      TRUE                                   : state;
+    esac;
+
+  next(wait_cnt) :=
+    case
+      state = waiting : min(wait_cnt + 1, K); -- Увеличиваем таймер только в состоянии “waiting”
+      state = idle    : 0;
+      state = left    : 0;
+      state = serving : 0;
+      state = served  : 0;
+      TRUE            : wait_cnt;
+    esac;

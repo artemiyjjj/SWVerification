@@ -1,0 +1,55 @@
+MODULE main
+DEFINE
+  N   := 2;          -- число окон
+  M   := 5;          -- лимит длины каждой очереди
+  K   := 6;          -- время, после которого клиент уйдёт
+  T_SEND    := 3;
+  T_RECEIVE := 2;
+  POLICY    := 1;   -- Метод выбора клиента: 0‑случайный клиент, 1‑самый долго-ждущий клиент
+
+  MAX_CLIENTS := N + 2*M;
+
+VAR
+  win : array 0..N-1 of window;
+  cl  : array 0..MAX_CLIENTS-1 of client;
+  env : env;
+
+ASSIGN
+  FORALL i IN 0..N-1 DO
+    win[i].busy       := env.assign_client[i];
+    win[i].cur_cli    := env.client_to_serve[i];
+    win[i].service_type := env.service_type[i];
+  ENDFOR;
+
+  FORALL i IN 0..MAX_CLIENTS-1 DO
+    cl[i].state       := case
+                          env.client_arrives[i] : waiting;
+                          env.start_service[i]  : serving;
+                          env.service_done[i]   : served;
+                          TRUE                   : cl[i].state;
+                        esac;
+    cl[i].wait_cnt    := case
+                          cl[i].state = waiting & cl[i].wait_cnt < K : cl[i].wait_cnt + 1;
+                          TRUE                                        : cl[i].wait_cnt;
+                        esac;
+  ENDFOR;
+
+LTLSPEC
+  G !(exists i : cl[i].state = left) --  Никто не покинет очередь (нет state=left)
+
+LTLSPEC
+  G (  (count(q_send) <= M)  &  (count(q_receive) <= M)  ) -- Длина любой очереди <= M
+
+LTLSPEC
+  G ( forall i,j.
+        ( cl[i].state = waiting & cl[j].state = waiting &
+          cl[i].wait_cnt > cl[j].wait_cnt ) -> ( cl[i] будет обслужен позже чем cl[j] )
+     ) -- FIFO внутри каждой отдельной очереди
+
+CTLSPEC
+  AG ( cl[i].state = waiting & cl[j].state = waiting &
+       cl[i].wait_cnt > cl[j].wait_cnt
+       -> A[ (! (cl[i].state = served) ) U (cl[j].state = served) ] ) -- Будет обслужен после
+
+DEFINE
+  count(q) := sum i in 0..M-1 : ( q[i] = occupied ? 1 : 0 );
